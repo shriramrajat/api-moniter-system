@@ -13,8 +13,11 @@ async def create_log_entry(
 ):
     """
     Writes a log entry to the database asynchronously.
-    This creates its own session to ensure it doesn't interfere with the main request scope
-    if called in background.
+    
+    CRITICAL:
+    This function creates its own isolated database session (`AsyncSessionLocal`).
+    It does NOT use the dependency injection session from the main request, 
+    because that session might be closed by the time this background task runs.
     """
     async with AsyncSessionLocal() as session:
         log_entry = APILog(
@@ -27,3 +30,5 @@ async def create_log_entry(
         )
         session.add(log_entry)
         await session.commit()
+        # No need to refresh unless we need the ID immediately, 
+        # which we don't for fire-and-forget logging.
