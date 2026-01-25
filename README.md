@@ -1,76 +1,92 @@
 # API Monitor System
 
-**A high-performance, asynchronous API logging and monitoring architecture built with FastAPI.**
+**A high-performance, asynchronous API logging and monitoring architecture built with FastAPI/Python.**
 
-This project demonstrates how to build a production-grade monitoring service that ingests, stores, and analyzes API traffic without impacting application performance.
+> **Philosophy**: "Observability should never be the bottleneck."
 
-## 🚀 Key Features
+This project demonstrates a production-grade monitoring pipeline that ingests, stores, aggregates, and summarizes API traffic without impacting the latency of the main application.
 
-*   **Zero-Overhead Logging**: Uses **Middleware + Background Tasks** to capture logs asynchronously. The user *never* waits for the database write.
-*   **Granular Telemetry**: Captures **exact latency (ms)**, HTTP methods, endpoints, status codes, and full error traces.
-*   **Failure Forensics**: Automtically catches unhandled exceptions (500s) and securely stores the stack trace for querying.
-*   **Optimized Storage**: PostgreSQL schema optimized with compound indices for time-series querying.
+---
 
-## 🛠️ Tech Stack
+## 🏗️ Architecture & Decisions
 
-*   **Core**: Python 3.13+, FastAPI
-*   **Database**: PostgreSQL (with `asyncpg` driver), SQLAlchemy (Async ORM)
-*   **Server**: Uvicorn (ASGI)
+### 1. Ingestion Strategy: "Zero-Overhead"
+**Why Middleware + Background Tasks?**
+We intercept requests using `LoggingMiddleware`, but we **never** write to the database in the request loop.
+- **Problem**: Synchronous logging waits for disk I/O. If the DB slows down, the *user experience* degrades.
+- **Solution**: We calculate latency, then hand off the data payload to a `clean_background_task`. The user gets their response immediately. The log is written asynchronously.
+
+### 2. Database Design: "Read-Optimized"
+**Why Composite Indices?**
+We use composite indices like `(timestamp, status_code)`.
+- **Reason**: Operators query logs by time range AND failure type (e.g., "Show me 500 errors from the last hour"). Scanning millions of rows linearly is unacceptable. These indices make forensics instant.
+
+### 3. Aggregation: "Pre-computation"
+**Why Background Jobs?**
+We have a dedicated aggregation service that runs periodically (e.g., hourly).
+- **Reason**: Calculating "Average Latency" across 1,000,000 rows on every dashboard refresh is expensive. We compute it *once*, store the summary, and serve the dashboard from that lightweight summary table.
+
+### 4. AI Integration: "Summarization, Not Detection"
+**Why is AI optional and constrained?**
+We use AI (OpenAI/Gemini) to *explain* incidents, not to *detect* them.
+- **Rule**: Mathematical thresholds (e.g., "Error rate > 5%") detect failure. AI reads the stack traces and summarizes the *meaning* (e.g., "Database connection timeout in user service").
+- **Safety**: We never let AI decide severity or suppress logs. It is a "Co-pilot", not a "Pilot".
+
+---
 
 ## ⚡ Quick Start
 
 ### 1. Prerequisites
 *   Python 3.10+
-*   PostgreSQL installed locally.
+*   PostgreSQL
 
 ### 2. Installation
-
 ```bash
-# Clone the repository
 git clone https://github.com/shriramrajat/API-Monitering-System.git
 cd API-Monitering-System
-
-# Create and activate virtual environment
 python -m venv venv
-# Windows:
-.\venv\Scripts\activate
-# Mac/Linux:
-source venv/bin/activate
-
-# Install dependencies
+# Activate venv
 pip install -r requirements.txt
 ```
 
-### 3. Configuration
-Create a `.env` file in the root directory:
-
+### 3. Configuration (.env)
 ```ini
-DATABASE_URL=postgresql+asyncpg://postgres:YOUR_PASSWORD@localhost/YOUR_DB_NAME
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost/db_name
+OPENAI_API_KEY=sk-... (Optional)
 ```
 
-### 4. Run the Server
+### 4. Run
 ```bash
+# Start Server (Auto-reloads)
 python -m uvicorn app.main:app --reload
+
+# Access Dashboard
+http://127.0.0.1:8000/dashboard
 ```
-API will be live at `http://127.0.0.1:8000`.
+
+---
 
 ## 📂 Project Structure
 
 ```
 ├── app/
-│   ├── main.py            # Application entry point
-│   ├── middleware.py      # The interceptor (captures requests)
-│   ├── models.py          # Database tables (APILog, LogSummary)
-│   ├── database.py        # Async DB connection logic
-│   └── services/
-│       └── log_service.py # Database write logic (Ingestion)
-├── LOGGING_STRATEGY.md    # Detailed architecture decisions
-├── SCHEMA.md              # Database schema documentation
-└── requirements.txt
+│   ├── main.py            # App entry point
+│   ├── middleware.py      # The "Wire Tap" (Async Logger)
+│   ├── models.py          # SQL Tables & Indices
+│   ├── routers/
+│   │   └── analytics.py   # Analysis API Endpoints
+│   ├── services/
+│   │   ├── log_service.py # Ingestion & Truncation Logic
+│   │   ├── ai_service.py  # LLM Integration
+│   │   └── aggregation_service.py # Background Worker logic
+│   └── static/            # Minimal Dashboard UI
+└── LOGGING_STRATEGY.md    # Deeper design notes
 ```
 
-## 🔮 Roadmap
-- [x] **Ingestion**: Core logging middleware.
-- [ ] **Aggregation**: Background job to calculate hourly stats (Avg Latency, Error Rates).
-- [ ] **Query API**: Endpoints to filter and view logs.
-- [ ] **Dashboard**: Simple frontend to visualize the health of the system.
+## 🛡️ Resilience Features
+*   **Error Truncation**: Massive stack traces are chopped at 1000 chars to prevent DB flooding.
+*   **UTC Enforcement**: All timestamps are normalized to prevent timezone drift.
+*   **Batching Ready**: Architecture supports decoupling via message queues (if traffic scaled to millions/sec).
+
+---
+*Built with ❤️ for educational purposes.*
