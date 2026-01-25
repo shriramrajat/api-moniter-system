@@ -82,6 +82,7 @@ async def get_latency_summary(db: AsyncSession = Depends(get_db)):
     result = await db.execute(query)
     rows = result.all()
     
+
     return [
         {
             "endpoint": row.endpoint, 
@@ -91,3 +92,32 @@ async def get_latency_summary(db: AsyncSession = Depends(get_db)):
         }
         for row in rows
     ]
+
+from app.services.ai_service import generate_incident_report
+
+@router.get("/incident-report", description="Generate AI-powered incident summary")
+async def get_ai_incident_report(db: AsyncSession = Depends(get_db)):
+    """
+    Fetches recent errors and uses AI to explain what is wrong.
+    """
+    # 1. Fetch recent errors (last 100)
+    query = (
+        select(APILog.error_message, APILog.endpoint, APILog.status_code)
+        .where(APILog.status_code >= 500)
+        .order_by(APILog.timestamp.desc())
+        .limit(50)
+    )
+    
+    result = await db.execute(query)
+    rows = result.all()
+    
+    if not rows:
+        return {"report": "✅ System is healthy. No 5xx errors detected in recent logs."}
+
+    # 2. Format logs for AI
+    error_logs = [f"[{row.status_code}] {row.endpoint}: {row.error_message}" for row in rows]
+    
+    # 3. Call AI
+    report = generate_incident_report(error_logs)
+    
+    return {"report": report}
