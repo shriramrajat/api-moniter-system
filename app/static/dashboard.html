@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Monitor Dashboard</title>
+    <style>
+        body { font-family: monospace; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        h1, h2 { border-bottom: 2px solid #000; padding-bottom: 5px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f4f4f4; }
+        .filters { margin-bottom: 20px; padding: 10px; background: #eee; border: 1px solid #999; }
+        input, button { padding: 5px; margin-right: 10px; }
+        .error { color: red; font-weight: bold; }
+        .loading { color: #666; font-style: italic; }
+        #ai-report { white-space: pre-wrap; background: #f9f9f9; padding: 10px; border-left: 5px solid #007bff; }
+    </style>
+</head>
+<body>
+
+    <h1>🚨 API Observability Dashboard</h1>
+
+    <div class="filters">
+        <label>Status Code:</label>
+        <input type="number" id="filterStatus" placeholder="e.g. 500">
+        <label>Endpoint:</label>
+        <input type="text" id="filterEndpoint" placeholder="e.g. /users">
+        <button onclick="loadData()">Apply Filters & Refresh</button>
+    </div>
+
+    <!-- AI SECTION -->
+    <div class="card">
+        <h2>🤖 AI Incident Report</h2>
+        <div id="ai-report" class="loading">Loading intelligent analysis...</div>
+        <button onclick="loadAI()" style="margin-top:10px">Regenerate Analysis</button>
+    </div>
+
+    <div class="grid">
+        <!-- ERROR SUMMARY -->
+        <div class="card">
+            <h2>🔥 Top Errors</h2>
+            <table>
+                <thead>
+                    <tr><th>Endpoint</th><th>Count</th></tr>
+                </thead>
+                <tbody id="errorTable"></tbody>
+            </table>
+        </div>
+
+        <!-- LATENCY SUMMARY -->
+        <div class="card">
+            <h2>🐢 Latency Stats</h2>
+            <table>
+                <thead>
+                    <tr><th>Endpoint</th><th>Avg (ms)</th><th>Max (ms)</th></tr>
+                </thead>
+                <tbody id="latencyTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- RAW LOGS -->
+    <div class="card">
+        <h2>📜 Recent Logs (Raw)</h2>
+        <div id="logsCount"></div>
+        <table>
+            <thead>
+                <tr><th>Time</th><th>Method</th><th>Endpoint</th><th>Status</th><th>Latency</th><th>Error</th></tr>
+            </thead>
+            <tbody id="logsTable"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const API_BASE = '/analytics';
+
+        async function loadData() {
+            loadErrors();
+            loadLatency();
+            loadLogs();
+        }
+
+        async function loadErrors() {
+            const res = await fetch(`${API_BASE}/summary/errors`);
+            const data = await res.json();
+            const tbody = document.getElementById('errorTable');
+            tbody.innerHTML = data.length 
+                ? data.map(r => `<tr><td>${r.endpoint}</td><td class="error">${r.error_count}</td></tr>`).join('')
+                : '<tr><td colspan="2">No errors detected. System healthy.</td></tr>';
+        }
+
+        async function loadLatency() {
+            const res = await fetch(`${API_BASE}/summary/latency`);
+            const data = await res.json();
+            const tbody = document.getElementById('latencyTable');
+            tbody.innerHTML = data.length
+                ? data.map(r => `<tr><td>${r.endpoint}</td><td>${r.avg_latency}</td><td>${r.max_latency}</td></tr>`).join('')
+                : '<tr><td colspan="3">No traffic recorded yet.</td></tr>';
+        }
+
+        async function loadLogs() {
+            let url = `${API_BASE}/logs?limit=50`;
+            const status = document.getElementById('filterStatus').value;
+            const endpoint = document.getElementById('filterEndpoint').value;
+            
+            if (status) url += `&status_code=${status}`;
+            if (endpoint) url += `&endpoint=${endpoint}`;
+
+            const res = await fetch(url);
+            const data = await res.json();
+            const tbody = document.getElementById('logsTable');
+            
+            document.getElementById('logsCount').innerText = `Showing ${data.length} records`;
+
+            tbody.innerHTML = data.length
+                ? data.map(r => `
+                    <tr>
+                        <td>${new Date(r.timestamp).toLocaleTimeString()}</td>
+                        <td>${r.method}</td>
+                        <td>${r.endpoint}</td>
+                        <td class="${r.status_code >= 400 ? 'error' : ''}">${r.status_code}</td>
+                        <td>${r.latency_ms.toFixed(2)}ms</td>
+                        <td style="font-size:0.8em">${r.error_message ? r.error_message.substring(0, 50) : '-'}</td>
+                    </tr>`).join('')
+                : '<tr><td colspan="6">No logs match filters.</td></tr>';
+        }
+
+        async function loadAI() {
+            document.getElementById('ai-report').innerText = "Querying AI Service...";
+            try {
+                const res = await fetch(`${API_BASE}/incident-report`);
+                const data = await res.json();
+                document.getElementById('ai-report').innerText = data.report || "No report generated.";
+            } catch (e) {
+                document.getElementById('ai-report').innerText = "Failed to fetch AI report.";
+            }
+        }
+
+        // Initial Load
+        loadData();
+        loadAI();
+    </script>
+</body>
+</html>

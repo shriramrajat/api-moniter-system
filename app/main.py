@@ -1,9 +1,11 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from app.middleware import LoggingMiddleware
 from app.database import engine, Base
 from app.routers import analytics
 import random
 import time
+import os
 
 app = FastAPI(title="API Log & Monitoring System")
 
@@ -18,6 +20,11 @@ app.include_router(analytics.router)
 async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard():
+    with open(os.path.join("app", "static", "dashboard.html"), "r", encoding="utf-8") as f:
+        return f.read()
 
 @app.get("/")
 async def root():
