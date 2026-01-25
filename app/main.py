@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from app.middleware import LoggingMiddleware
 from app.database import engine, Base
+from app.routers import analytics
 import random
 import time
 
@@ -8,6 +9,9 @@ app = FastAPI(title="API Log & Monitoring System")
 
 # Add Middleware
 app.add_middleware(LoggingMiddleware)
+
+# Include Routers
+app.include_router(analytics.router)
 
 # Startup Event to Create Tables (For Dev Simplicity)
 @app.on_event("startup")
