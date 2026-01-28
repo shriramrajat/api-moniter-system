@@ -6,11 +6,30 @@
 
 This project demonstrates a production-grade monitoring pipeline that ingests, stores, aggregates, and summarizes API traffic without impacting the latency of the main application.
 
+### ❌ Non-Goals
+- Real-time alerting (out of scope for v1)
+- Distributed tracing (requires external tooling)
+- ML-based anomaly detection (intentionally avoided)
+
 ---
 
 ## 🏗️ Architecture & Decisions
 
-### 1. Ingestion Strategy: "Zero-Overhead"
+```text
+Request → Middleware → Response (returned immediately)
+                    ↓
+              Background Task
+                    ↓
+               PostgreSQL
+                    ↓
+           Aggregation Worker
+                    ↓
+              Summary Tables
+                    ↓
+                Dashboard
+```
+
+### 1. Ingestion Strategy: "Near-Zero Overhead on Request Path"
 **Why Middleware + Background Tasks?**
 We intercept requests using `LoggingMiddleware`, but we **never** write to the database in the request loop.
 - **Problem**: Synchronous logging waits for disk I/O. If the DB slows down, the *user experience* degrades.
@@ -31,6 +50,22 @@ We have a dedicated aggregation service that runs periodically (e.g., hourly).
 We use AI (OpenAI/Gemini) to *explain* incidents, not to *detect* them.
 - **Rule**: Mathematical thresholds (e.g., "Error rate > 5%") detect failure. AI reads the stack traces and summarizes the *meaning* (e.g., "Database connection timeout in user service").
 - **Safety**: We never let AI decide severity or suppress logs. It is a "Co-pilot", not a "Pilot".
+
+---
+
+## 🚨 Failure Scenarios & Mitigations
+
+| Scenario | Impact & Mitigation |
+| :--- | :--- |
+| **Database Down** | Logs are dropped or queued until memory fills; **Request latency is unaffected**. |
+| **High Traffic Burst** | Background tasks process backlog at their own pace; Primary API remains responsive. |
+| **Worker Failure** | Aggregation stops updating the dashboard, but raw logs are still preserved for later processing. |
+
+## 📊 Dashboard
+
+- Served from **pre-aggregated summary tables**
+- No heavy queries on raw logs
+- Optimized for read performance
 
 ---
 
@@ -86,7 +121,7 @@ http://127.0.0.1:8000/dashboard
 ## 🛡️ Resilience Features
 *   **Error Truncation**: Massive stack traces are chopped at 1000 chars to prevent DB flooding.
 *   **UTC Enforcement**: All timestamps are normalized to prevent timezone drift.
-*   **Batching Ready**: Architecture supports decoupling via message queues (if traffic scaled to millions/sec).
+*   **Batching Ready**: Architecture supports decoupling via message queues. The background task boundary can be replaced with Kafka/RabbitMQ without changing the request path.
 
 ---
 *Built with ❤️ for educational purposes.*
