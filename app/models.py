@@ -12,6 +12,7 @@ class APILog(Base):
     status_code = Column(Integer, nullable=False)
     latency_ms = Column(Float, nullable=False)
     error_message = Column(String, nullable=True)
+    user_agent = Column(String(500), nullable=True)  
 
     # Indexes as per requirements
     __table_args__ = (
