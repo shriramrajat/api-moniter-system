@@ -6,6 +6,7 @@ from app.routers import analytics
 import random
 import time
 import os
+from app.services.scheduler_service import start_scheduler, stop_scheduler
 
 app = FastAPI(title="API Log & Monitoring System")
 
@@ -20,11 +21,20 @@ app.include_router(analytics.router)
 async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    start_scheduler()
+
+@app.on_event("shutdown")
+async def shutdown():
+    stop_scheduler()
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard():
     with open(os.path.join("app", "static", "dashboard.html"), "r", encoding="utf-8") as f:
         return f.read()
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 @app.get("/")
 async def root():

@@ -57,22 +57,25 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         # FastAPI will send the response to the user FIRST, then run this function.
         # This ensures logging never slows down the user's response time.
         
-        log_task = BackgroundTask(
-            create_log_entry,
-            timestamp=start_datetime,
-            method=method,
-            endpoint=endpoint,
-            status_code=status_code,
-            latency_ms=latency_ms,
-            error_message=error_message
-        )
+        # IMPORTANT: create_log_entry is async, so we need to wrap it
+        async def log_wrapper():
+            await create_log_entry(
+                timestamp=start_datetime,
+                method=method,
+                endpoint=endpoint,
+                status_code=status_code,
+                latency_ms=latency_ms,
+                error_message=error_message
+            )
+        
+        log_task = BackgroundTask(log_wrapper)
         
         # If the response already has a background task, we must chain them.
         if response.background:
             previous_task = response.background
             async def composite_task():
                 await previous_task()
-                await log_task()
+                await log_wrapper()
             response.background = BackgroundTask(composite_task)
         else:
             response.background = log_task
