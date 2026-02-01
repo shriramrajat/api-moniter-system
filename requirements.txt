@@ -6,3 +6,6 @@ pydantic
 pydantic-settings
 python-dotenv
 alembic
+openai
+pytest
+httpx
