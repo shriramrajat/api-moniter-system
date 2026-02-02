@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: api_monitor_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=NewStrongPassword123
+      - POSTGRES_DB=api_moniter
+    ports:
+      - "5433:5432"
+
+  # 2. FastAPI Application
+  web:
+    build: .
+    container_name: api_monitor_web
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - .:/app
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:NewStrongPassword123@db:5432/api_moniter
+      # We need to ensure basic env vars are present. 
+      # In production, these should be secrets. 
+      # For now, we assume OPENAI_API_KEY is in your local .env or system env.
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
