@@ -77,7 +77,7 @@ We use AI (OpenAI/Gemini) to *explain* incidents, not to *detect* them.
 
 ### 2. Installation
 ```bash
-git clone https://github.com/shriramrajat/API-Monitering-System.git
+git clone https://github.com/shriramrajat/api-moniter-system.git
 cd API-Monitering-System
 python -m venv venv
 # Activate venv
@@ -124,4 +124,4 @@ http://127.0.0.1:8000/dashboard
 *   **Batching Ready**: Architecture supports decoupling via message queues. The background task boundary can be replaced with Kafka/RabbitMQ without changing the request path.
 
 ---
-*Built with ❤️ for educational purposes.*
+*Built Rajat Shriram for educational purposes.*
