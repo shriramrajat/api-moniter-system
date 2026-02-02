@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from app.middleware import LoggingMiddleware
+from app.services.rate_limiter import RateLimitMiddleware # Import Rate Limiter
 from app.database import engine, Base
 from app.routers import analytics
 import random
@@ -11,16 +12,27 @@ from app.services.scheduler_service import start_scheduler, stop_scheduler
 app = FastAPI(title="API Log & Monitoring System")
 
 # Add Middleware
+# Note: Middleware is applied in reverse order (Run Last Added -> First Added)
+# We want: Request -> Logging -> RateLimit -> App
+# So we add RateLimit (Inner), then Logging (Outer) behaves correctly? 
+# Actually FastAPI `add_middleware` wraps the app. 
+# 1. app = RateLimit(app)
+# 2. app = Logging(app)
+# So Request -> Logging -> RateLimit -> App. 
+# Thus, we must add RateLimit First, then Logging.
+
+app.add_middleware(RateLimitMiddleware, requests_per_minute=20) # 20 req/min for testing
 app.add_middleware(LoggingMiddleware)
 
 # Include Routers
 app.include_router(analytics.router)
 
-# Startup Event to Create Tables (For Dev Simplicity)
+# Startup Event
 @app.on_event("startup")
 async def startup():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Alembic handles migrations now, so we don't need create_all
+    # async with engine.begin() as conn:
+    #     await conn.run_sync(Base.metadata.create_all)
     start_scheduler()
 
 @app.on_event("shutdown")
