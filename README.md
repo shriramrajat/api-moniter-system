@@ -1,127 +1,153 @@
 # API Monitor System
 
-**A high-performance, asynchronous API logging and monitoring architecture built with FastAPI/Python.**
+![API Monitor Banner](media/banner.png)
 
-> **Philosophy**: "Observability should never be the bottleneck."
+<div align="center">
 
-This project demonstrates a production-grade monitoring pipeline that ingests, stores, aggregates, and summarizes API traffic without impacting the latency of the main application.
+**Next-Gen Asynchronous API Observability & Analytics Platform**
 
-### ❌ Non-Goals
-- Real-time alerting (out of scope for v1)
-- Distributed tracing (requires external tooling)
-- ML-based anomaly detection (intentionally avoided)
+[![Python](https://img.shields.io/badge/Python-3.13+-blue.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-336791.svg?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat)](LICENSE)
+
+</div>
 
 ---
 
-## 🏗️ Architecture & Decisions
+## 📖 Overview
 
-```text
-Request → Middleware → Response (returned immediately)
-                    ↓
-              Background Task
-                    ↓
-               PostgreSQL
-                    ↓
-           Aggregation Worker
-                    ↓
-              Summary Tables
-                    ↓
-                Dashboard
+**API Monitor System** is a production-grade, high-performance monitoring architecture designed to provide deep observability into API traffic **without compromising latency**.
+
+Unlike traditional synchronous logging which can slow down request processing, this system employs a **"Fire-and-Forget"** middleware strategy, offloading ingestion, analysis, and aggregation to background workers. It features a complete analytics dashboard with real-time charts, detailed logs, and **AI-powered incident reporting**.
+
+### 🌟 Key Features
+
+*   **🚀 Zero-Latency Logging**: Async middleware captures traffic without blocking the main thread.
+*   **📊 Premium Dashboard**: Interactive charts for Latency Trends and Error Distribution (powered by Chart.js).
+*   **🤖 AI Incident Reports**: Integrated with OpenAI/Gemini to automatically explain *why* errors are happening.
+*   **🛡️ Rate Limiting**: Token-bucket algorithm protection against abuse and DDoS attempts.
+*   **💾 Optimized Storage**: PostgreSQL with composite indices for instant querying of millions of logs.
+*   **⚡ Auto-Aggregation**: Background jobs pre-calculate hourly statistics for instant dashboard loading.
+*   **🐳 Dockerized**: "One-click" deployment with Docker Compose.
+
+---
+
+## 🏗️ Architecture
+
+The system follows a decoupled, event-driven design to ensure resilience and speed.
+
+```mermaid
+graph TD
+    User([User Request]) -->|HTTP| Middleware[🛡️ Middleware & Rate Limiter]
+    Middleware -->|Pass| API[FastAPI Handler]
+    API -->|Response| User
+    
+    Middleware -.->|Async Log| Background[Background Task]
+    Background -->|Insert| DB[(PostgreSQL)]
+    
+    Scheduler[⏰ Hourly Scheduler] -->|Trigger| Aggregator[Aggregation Service]
+    Aggregator -->|Read Raw Logs| DB
+    Aggregator -->|Write Summary| DB
+    
+    Dashboard([🖥️ Dashboard]) -->|Read Summary| DB
+    Dashboard -->|AI Query| AI[🤖 OpenAI/Gemini]
 ```
 
-### 1. Ingestion Strategy: "Near-Zero Overhead on Request Path"
-**Why Middleware + Background Tasks?**
-We intercept requests using `LoggingMiddleware`, but we **never** write to the database in the request loop.
-- **Problem**: Synchronous logging waits for disk I/O. If the DB slows down, the *user experience* degrades.
-- **Solution**: We calculate latency, then hand off the data payload to a `clean_background_task`. The user gets their response immediately. The log is written asynchronously.
+---
 
-### 2. Database Design: "Read-Optimized"
-**Why Composite Indices?**
-We use composite indices like `(timestamp, status_code)`.
-- **Reason**: Operators query logs by time range AND failure type (e.g., "Show me 500 errors from the last hour"). Scanning millions of rows linearly is unacceptable. These indices make forensics instant.
+## 🛠️ Tech Stack
 
-### 3. Aggregation: "Pre-computation"
-**Why Background Jobs?**
-We have a dedicated aggregation service that runs periodically (e.g., hourly).
-- **Reason**: Calculating "Average Latency" across 1,000,000 rows on every dashboard refresh is expensive. We compute it *once*, store the summary, and serve the dashboard from that lightweight summary table.
-
-### 4. AI Integration: "Summarization, Not Detection"
-**Why is AI optional and constrained?**
-We use AI (OpenAI/Gemini) to *explain* incidents, not to *detect* them.
-- **Rule**: Mathematical thresholds (e.g., "Error rate > 5%") detect failure. AI reads the stack traces and summarizes the *meaning* (e.g., "Database connection timeout in user service").
-- **Safety**: We never let AI decide severity or suppress logs. It is a "Co-pilot", not a "Pilot".
+*   **Backend Framework**: FastAPI (Python)
+*   **Database**: PostgreSQL (AsyncPG + SQLAlchemy 2.0)
+*   **Migrations**: Alembic
+*   **Resilience**: Rate Limiting (Token Bucket), Retries
+*   **Frontend**: HTML5, Vanilla JS, Chart.js
+*   **Scheduling**: APScheduler
+*   **Deployment**: Docker & Docker Compose
 
 ---
 
-## 🚨 Failure Scenarios & Mitigations
+## 🚀 Quick Start
 
-| Scenario | Impact & Mitigation |
-| :--- | :--- |
-| **Database Down** | Logs are dropped or queued until memory fills; **Request latency is unaffected**. |
-| **High Traffic Burst** | Background tasks process backlog at their own pace; Primary API remains responsive. |
-| **Worker Failure** | Aggregation stops updating the dashboard, but raw logs are still preserved for later processing. |
+### Option A: Docker (Recommended)
 
-## 📊 Dashboard
+Run the entire stack (App + DB) with a single command:
 
-- Served from **pre-aggregated summary tables**
-- No heavy queries on raw logs
-- Optimized for read performance
+```bash
+docker-compose up --build
+```
+Access the dashboard at `http://localhost:8001/dashboard`.
 
----
+### Option B: Local Development
 
-## ⚡ Quick Start
-
-### 1. Prerequisites
-*   Python 3.10+
-*   PostgreSQL
-
-### 2. Installation
+**1. Clone the Repository**
 ```bash
 git clone https://github.com/shriramrajat/api-moniter-system.git
-cd API-Monitering-System
+cd api-moniter-system
+```
+
+**2. Setup Virtual Environment**
+```bash
 python -m venv venv
-# Activate venv
+# Windows
+venv\Scripts\activate
+# Mac/Linux
+source venv/bin/activate
+```
+
+**3. Install Dependencies**
+```bash
 pip install -r requirements.txt
 ```
 
-### 3. Configuration (.env)
+**4. Configure Environment**
+Create a `.env` file (see `.env.example`):
 ```ini
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost/db_name
-OPENAI_API_KEY=sk-... (Optional)
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/api_moniter
+OPENAI_API_KEY=your_key_here
 ```
 
-### 4. Run
+**5. Initialize Database**
 ```bash
-# Start Server (Auto-reloads)
+alembic upgrade head
+```
+
+**6. Run Server**
+```bash
 python -m uvicorn app.main:app --reload
-
-# Access Dashboard
-http://127.0.0.1:8000/dashboard
 ```
+Visit `http://127.0.0.1:8000/dashboard` to see your metrics!
 
 ---
 
-## 📂 Project Structure
+## 📸 Screenshots
 
-```
-├── app/
-│   ├── main.py            # App entry point
-│   ├── middleware.py      # The "Wire Tap" (Async Logger)
-│   ├── models.py          # SQL Tables & Indices
-│   ├── routers/
-│   │   └── analytics.py   # Analysis API Endpoints
-│   ├── services/
-│   │   ├── log_service.py # Ingestion & Truncation Logic
-│   │   ├── ai_service.py  # LLM Integration
-│   │   └── aggregation_service.py # Background Worker logic
-│   └── static/            # Minimal Dashboard UI
-└── LOGGING_STRATEGY.md    # Deeper design notes
-```
-
-## 🛡️ Resilience Features
-*   **Error Truncation**: Massive stack traces are chopped at 1000 chars to prevent DB flooding.
-*   **UTC Enforcement**: All timestamps are normalized to prevent timezone drift.
-*   **Batching Ready**: Architecture supports decoupling via message queues. The background task boundary can be replaced with Kafka/RabbitMQ without changing the request path.
+| **Live Dashboard** | **Incident Analysis** |
+|:---:|:---:|
+| <img src="https://via.placeholder.com/600x300?text=Premium+Dashboard+with+Charts" alt="Dashboard" width="100%"> | <img src="https://via.placeholder.com/600x300?text=AI+Error+Explanation" alt="AI Analysis" width="100%"> |
 
 ---
-*Built Rajat Shriram for educational purposes.*
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+---
+
+<div align="center">
+  <p>Built with ❤️ by <b>Rajat Shriram</b></p>
+</div>
