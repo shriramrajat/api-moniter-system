@@ -126,7 +126,7 @@ Visit `http://127.0.0.1:8000/dashboard` to see your metrics!
 
 | **Live Dashboard** | **Incident Analysis** |
 |:---:|:---:|
-| <img src="https://via.placeholder.com/600x300?text=Premium+Dashboard+with+Charts" alt="Dashboard" width="100%"> | <img src="https://via.placeholder.com/600x300?text=AI+Error+Explanation" alt="AI Analysis" width="100%"> |
+| <img src="media/01.png" alt="Dashboard" width="100%"> | <img src="media/02.png" alt="AI Analysis" width="100%"> |
 
 ---
 
